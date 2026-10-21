@@ -9,8 +9,10 @@ import {
   Settings, isElementFieldNode, isElementNode, isSimpleName,
 } from '@/core/utils/validate';
 import { type LocalModule } from '../types';
-import TableGroupValidator, { validateSettingList } from './validate';
+import TableGroupValidator from './validate';
 import { DEFAULT_SCHEMA_NAME } from '@/constants';
+import { validateInlineMetadata } from '../metadata/utils';
+import { TABLEGROUP_METADATA_FIELDS } from '@/core/global_modules/tableGroup/interpret';
 
 export const tableGroupModule: LocalModule = {
   validateNode (compiler: Compiler, node: SyntaxNode): Report<void> | Report<PassThrough> {
@@ -72,7 +74,11 @@ export const tableGroupModule: LocalModule = {
 
   nodeSettings (compiler: Compiler, node: SyntaxNode): Report<Settings> | Report<PassThrough> {
     if (isElementNode(node, ElementKind.TableGroup)) {
-      return validateSettingList(node.attributeList);
+      return validateInlineMetadata(
+        node.attributeList,
+        TABLEGROUP_METADATA_FIELDS,
+        { duplicate: CompileErrorCode.DUPLICATE_TABLEGROUP_SETTING, invalidValue: CompileErrorCode.INVALID_TABLEGROUP_SETTING_VALUE },
+      );
     }
     if (isElementFieldNode(node, ElementKind.TableGroup)) {
       return new Report({});

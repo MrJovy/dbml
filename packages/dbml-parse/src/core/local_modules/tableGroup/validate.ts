@@ -1,15 +1,15 @@
 import { partition } from 'lodash-es';
 import Compiler from '@/compiler';
 import { CompileError, CompileErrorCode } from '@/core/types/errors';
-import { ElementKind, SettingName } from '@/core/types/keywords';
+import { ElementKind } from '@/core/types/keywords';
 import {
   BlockExpressionNode, ElementDeclarationNode, FunctionApplicationNode, ListExpressionNode, SyntaxNode, WildcardNode,
 } from '@/core/types/nodes';
 import Report from '@/core/types/report';
 import { destructureComplexVariable } from '@/core/utils/expression';
-import { Settings, aggregateSettingList, isSimpleName } from '@/core/utils/validate';
+import { Settings, isSimpleName } from '@/core/utils/validate';
 import { TABLEGROUP_METADATA_FIELDS } from '@/core/global_modules/tableGroup/interpret';
-import { validateCustomInlineMetadata } from '../metadata/utils';
+import { validateInlineMetadata } from '../metadata/utils';
 
 export default class TableGroupValidator {
   private declarationNode: ElementDeclarationNode;
@@ -85,7 +85,14 @@ export default class TableGroupValidator {
   }
 
   private validateSettingList (settingList?: ListExpressionNode): CompileError[] {
-    return validateSettingList(settingList).getErrors();
+    return validateInlineMetadata(
+      settingList,
+      TABLEGROUP_METADATA_FIELDS,
+      {
+        duplicate: CompileErrorCode.DUPLICATE_TABLEGROUP_SETTING,
+        invalidValue: CompileErrorCode.INVALID_TABLEGROUP_SETTING_VALUE,
+      },
+    ).getErrors();
   }
 
   validateBody (body?: FunctionApplicationNode | BlockExpressionNode): CompileError[] {
@@ -140,47 +147,13 @@ export default class TableGroupValidator {
   }
 }
 
-export function validateSettingList (settingList?: ListExpressionNode): Report<Settings> {
-  const aggReport = aggregateSettingList(settingList);
-  const errors = aggReport.getErrors();
-  const settingMap = aggReport.getValue();
-  const clean: Settings = {};
-
-  for (const [name, attrs] of Object.entries(settingMap)) {
-    switch (name) {
-      case SettingName.Color:
-      case SettingName.Note: {
-        const specs = TABLEGROUP_METADATA_FIELDS[name as SettingName.Color | SettingName.Note]!;
-        if (attrs.length > 1) {
-          errors.push(...attrs.map((attr) => new CompileError(
-            CompileErrorCode.DUPLICATE_TABLE_SETTING,
-            `'${name}' can only appear once`,
-            attr,
-          )));
-        }
-        attrs.forEach((attr) => {
-          if (specs.parse(attr.value) === undefined) {
-            errors.push(new CompileError(
-              CompileErrorCode.INVALID_TABLE_SETTING_VALUE,
-              specs.message,
-              attr.value || attr.name!,
-            ));
-          }
-        });
-        clean[name] = attrs;
-        break;
-      }
-      default:
-        // Any non-builtin key is free-form inline custom metadata
-        errors.push(
-          ...validateCustomInlineMetadata(name, attrs, {
-            duplicate: CompileErrorCode.DUPLICATE_TABLE_SETTING,
-            invalidValue: CompileErrorCode.INVALID_TABLE_SETTING_VALUE,
-          }));
-        clean[name] = attrs;
-        break;
-    }
-  }
-
-  return new Report(clean, errors);
+function validateSettingList (settingList?: ListExpressionNode): Report<Settings> {
+  return validateInlineMetadata(
+    settingList,
+    TABLEGROUP_METADATA_FIELDS,
+    {
+      duplicate: CompileErrorCode.DUPLICATE_TABLEGROUP_SETTING,
+      invalidValue: CompileErrorCode.INVALID_TABLEGROUP_SETTING_VALUE,
+    },
+  );
 }
